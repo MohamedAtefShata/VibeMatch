@@ -3,30 +3,51 @@
 namespace App\Services\Profile;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
+use App\Repositories\Interfaces\UserRepositoryInterface;
 
-class ProfileService implements IprofileService
+class ProfileService implements IProfileService
 {
-    public function updateProfile(User $user, array $data): void
+    protected $userRepository;
+
+    public function __construct(UserRepositoryInterface $userRepository)
     {
-        $user->fill($data);
-
-        if ($user->isDirty('email')) {
-            $user->email_verified_at = null;
-        }
-
-        $user->save();
+        $this->userRepository = $userRepository;
     }
 
-    public function updatePassword(User $user, string $newPassword): void
+    /**
+     * Update user profile
+     *
+     * @param User $user
+     * @param array $data
+     * @return bool
+     */
+    public function updateProfile(User $user, array $data): bool
     {
-        $user->update([
-            'password' => Hash::make($newPassword),
+        return $this->userRepository->update($user, $data);
+    }
+
+    /**
+     * Update user password
+     *
+     * @param User $user
+     * @param string $password
+     * @return bool
+     */
+    public function updatePassword(User $user, string $password): bool
+    {
+        return $this->userRepository->update($user, [
+            'password' => $password
         ]);
     }
 
-    public function deleteAccount(User $user): void
+    /**
+     * Delete user account
+     *
+     * @param User $user
+     * @return bool
+     */
+    public function deleteAccount(User $user): bool
     {
-        $user->delete();
+        return $this->userRepository->delete($user);
     }
 }

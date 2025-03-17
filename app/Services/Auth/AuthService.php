@@ -2,20 +2,24 @@
 
 namespace App\Services\Auth;
 
-use App\Services\Auth\IAuthService;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
-use Illuminate\Auth\Events\PasswordReset;
+use App\Repositories\Interfaces\UserRepositoryInterface;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Str;
 
 class AuthService implements IAuthService
 {
+    protected $userRepository;
+
+    public function __construct(UserRepositoryInterface $userRepository)
+    {
+        $this->userRepository = $userRepository;
+    }
+
     public function authenticateUser(LoginRequest $request): void
     {
         $request->authenticate();
@@ -31,10 +35,10 @@ class AuthService implements IAuthService
 
     public function registerUser(array $userData): User
     {
-        $user = User::create([
+        $user = $this->userRepository->create([
             'name' => $userData['name'],
             'email' => $userData['email'],
-            'password' => Hash::make($userData['password']),
+            'password' => $userData['password'],
         ]);
 
         event(new Registered($user));

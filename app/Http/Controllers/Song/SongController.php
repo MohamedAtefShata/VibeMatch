@@ -10,6 +10,7 @@ use App\Http\Requests\Song\UpdateSongRequest;
 use App\Services\Song\ISongService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,6 +31,14 @@ class SongController extends Controller
     public function __construct(ISongService $songService)
     {
         $this->songService = $songService;
+
+        // Apply middleware to admin-only actions
+        $this->middleware('admin')->only(['store', 'update']);
+
+        // Or use the auth middleware with the 'can' gate for more granular control
+        // $this->middleware('auth');
+        // $this->middleware('can:create,App\Models\Song')->only('store');
+        // $this->middleware('can:update,song')->only('update');
     }
 
     /**
@@ -43,8 +52,12 @@ class SongController extends Controller
         $perPage = $request->input('per_page', 15);
         $songs = $this->songService->getAllSongs($perPage);
 
+        // Pass isAdmin flag to view for conditional UI rendering
+        $isAdmin = $request->user() ? $request->user()->isAdmin() : false;
+
         return Inertia::render('Songs/Index', [
-            'songs' => $songs
+            'songs' => $songs,
+            'isAdmin' => $isAdmin
         ]);
     }
 
@@ -113,9 +126,13 @@ class SongController extends Controller
 
             $similar = $this->songService->getRecommendationsForSong($id);
 
+            // Pass isAdmin flag to view for conditional UI rendering
+            $isAdmin = request()->user() ? request()->user()->isAdmin() : false;
+
             return Inertia::render('Songs/Show', [
                 'song' => $song,
-                'similar' => $similar
+                'similar' => $similar,
+                'isAdmin' => $isAdmin
             ]);
         } catch (\Exception $e) {
             abort(500, 'Failed to retrieve song data');
@@ -130,6 +147,11 @@ class SongController extends Controller
      */
     public function store(StoreSongRequest $request): JsonResponse
     {
+        // Authorization is now handled by middleware, but you can also do it manually
+        // if (Gate::denies('create', Song::class)) {
+        //     return response()->json(['error' => 'Unauthorized action.'], 403);
+        // }
+
         try {
             $song = $this->songService->storeSong($request->validated());
             return response()->json($song, 201);
@@ -147,6 +169,7 @@ class SongController extends Controller
      */
     public function update(UpdateSongRequest $request, int $id): JsonResponse
     {
+        // Authorization is now handled by middleware
         try {
             $song = $this->songService->updateSong($id, $request->validated());
             return response()->json($song);

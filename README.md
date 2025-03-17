@@ -133,36 +133,6 @@ LIMIT 5;
 - Docker and Docker Compose
 - Node.js and npm
 
-### Database Setup with Docker
-
-1. Create a `docker-compose.yml` file in your project root:
-   ```yaml
-   version: '3'
-   services:
-     postgres:
-       image: pgvector/pgvector:pg13
-       ports:
-         - "5432:5432"
-       environment:
-         POSTGRES_USER: vibematch
-         POSTGRES_PASSWORD: password
-         POSTGRES_DB: vibematch
-       volumes:
-         - postgres_data:/var/lib/postgresql/data
-   volumes:
-     postgres_data:
-   ```
-
-2. Start the PostgreSQL container with pgvector extension:
-   ```bash
-   docker-compose up -d
-   ```
-
-3. Verify the container is running:
-   ```bash
-   docker-compose ps
-   ```
-
 ### Installation Steps
 
 1. Clone the repository
@@ -197,14 +167,19 @@ LIMIT 5;
    php artisan migrate --seed
    ```
 
+7. Start the PostgreSQL container with pgvector extension:
+   ```bash
+   docker-compose up -d
+   ```**
+
 7. Build frontend assets
    ```bash
-   npm run dev
+   npm run build
    ```
 
 8. Start the development server
    ```bash
-   php artisan serve
+   composer run dev
    ```
 
 ## 👥 User Roles

@@ -13,12 +13,60 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::prefix('api')->group(function () {
+    // Song-related API endpoints
     Route::prefix('songs')->name('api.songs.')->group(function () {
         Route::get('/search', [SongController::class, 'search'])->name('search');
         Route::post('/recommend', [SongController::class, 'recommend'])->name('recommend');
         Route::get('/previous-recommendations', [SongController::class, 'previousRecommendations'])->name('previous-recommendations');
+
+        // New endpoint for personalized recommendations, using existing methods
+        Route::middleware(['auth'])->get('/personalized', function() {
+            $songService = app(App\Services\Song\ISongService::class);
+            $userId = auth()->id();
+
+            // Use the existing recommendation methods
+            $forYou = [];
+            $basedOnGenre = [];
+
+            // For demo purposes, we'll use a hardcoded song ID to get recommendations
+            // In a real implementation, this would be based on user's history
+            if ($userId) {
+                try {
+                    $forYou = $songService->getRecommendationsForSong(1, 5)->toArray();
+
+                    // Get recommendations based on multiple songs (user's favorites)
+                    // This is just a placeholder - in a real app, you'd get the user's favorite songs
+                    $userFavoriteSongs = [1, 2, 3];
+                    $basedOnGenre = $songService->getRecommendationsForMultipleSongs($userFavoriteSongs, 5)->toArray();
+                } catch (\Exception $e) {
+                    \Log::error('Error getting personalized recommendations: ' . $e->getMessage());
+                }
+            }
+
+            return response()->json([
+                'forYou' => $forYou,
+                'basedOnGenre' => $basedOnGenre,
+                'newReleases' => [] // Placeholder for new releases
+            ]);
+        })->name('personalized');
     });
 
+    // User profile API endpoints - using existing Profile service
+    Route::middleware(['auth'])->prefix('user')->name('api.user.')->group(function () {
+        Route::get('/profile', function() {
+            $user = auth()->user();
+
+            // Build a basic profile response
+            // In a real implementation, you'd get this data from a proper user service
+            return response()->json([
+                'favoriteGenres' => [], // This would come from user's listening history
+                'recentPlays' => [],   // This would come from a plays/history table
+                'topArtists' => []     // This would be derived from listening history
+            ]);
+        })->name('profile');
+    });
+
+    // Admin-only song management API endpoints
     Route::middleware(['auth', 'admin'])->group(function () {
         Route::prefix('songs')->name('api.songs.')->group(function () {
             Route::post('/', [SongController::class, 'store'])->name('store');
@@ -26,44 +74,4 @@ Route::prefix('api')->group(function () {
             Route::delete('/{id}', [SongController::class, 'destroy'])->name('destroy');
         });
     });
-});
-
-// Admin routes
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-    // Admin songs management dashboard
-    Route::get('/songs', function () {
-        try {
-            $songService = app(App\Services\Song\ISongService::class);
-            $perPage = 15; // Number of items per page
-            $songs = $songService->getAllSongs($perPage);
-
-            // Ensure 'songs' has the expected structure for pagination
-            return Inertia::render('admin/AdminDashboard', [
-                'songs' => $songs,
-                'isAdmin' => true
-            ]);
-        } catch (\Exception $e) {
-            \Log::error('Error loading admin dashboard: ' . $e->getMessage());
-
-            // Provide a minimal structured object to prevent component errors
-            return Inertia::render('admin/AdminDashboard', [
-                'songs' => [
-                    'current_page' => 1,
-                    'data' => [],
-                    'links' => [],
-                    'total' => 0,
-                    'per_page' => 15,
-                    'last_page' => 1,
-                    'from' => 0,
-                    'to' => 0,
-                    'first_page_url' => '',
-                    'last_page_url' => '',
-                    'next_page_url' => null,
-                    'prev_page_url' => null,
-                    'path' => ''
-                ],
-                'isAdmin' => true
-            ]);
-        }
-    })->name('songs.index');
 });

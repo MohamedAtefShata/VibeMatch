@@ -9,17 +9,32 @@ Route::get('/', function () {
 
 Route::get('dashboard', function () {
     // Check if user is admin
-    if (auth()->user()->isAdmin()) {
+    $isAdmin = auth()->user()->isAdmin();
+
+    if ($isAdmin) {
         // Redirect admin users to the admin dashboard
         return redirect()->route('admin.songs.index');
     }
 
     // Regular users see the normal dashboard
     return Inertia::render('dashboard/Dashboard', [
-        'isAdmin' => auth()->user()->isAdmin()
+        'isAdmin' => false
     ]);
 })->middleware(['auth', 'verified'])->name('dashboard');
+
+// Personalized page for regular users
+Route::get('personalized', function () {
+    // Check if user is admin - admins should not see this page
+    if (auth()->user()->isAdmin()) {
+        return redirect()->route('admin.songs.index');
+    }
+
+    return Inertia::render('Personalized', [
+        'isAdmin' => false
+    ]);
+})->middleware(['auth', 'verified'])->name('personalized');
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
 require __DIR__.'/song.php';
+require __DIR__.'/admin.php';

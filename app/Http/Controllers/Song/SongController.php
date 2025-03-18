@@ -165,4 +165,28 @@ class SongController extends Controller
             return response()->json(['error' => 'Failed to update song: ' . $e->getMessage()], 500);
         }
     }
+
+    /**
+     * Delete a song.
+     *
+     * @param int $id
+     * @return JsonResponse
+     */
+    public function destroy(int $id): JsonResponse
+    {
+        try {
+            $song = $this->songService->getSongById($id);
+
+            if (!$song) {
+                return response()->json(['error' => 'Song not found'], 404);
+            }
+
+            // Assuming your service has a deleteSong method
+            $this->songService->deleteSong($id);
+
+            return response()->json(['message' => 'Song deleted successfully']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to delete song: ' . $e->getMessage()], 500);
+        }
+    }
 }

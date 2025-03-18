@@ -74,4 +74,14 @@ interface ISongService
      * @return Song
      */
     public function updateSong(int $id, array $data): Song;
+
+
+    /**
+     * Delete a song by its ID.
+     *
+     * @param int $id
+     * @return bool
+     * @throws \Exception
+     */
+    public function deleteSong(int $id): bool;
 }

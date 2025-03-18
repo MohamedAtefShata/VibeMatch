@@ -128,7 +128,7 @@ class SongService implements ISongService
 
         // Return empty array if API call fails
         // In production, you might want to handle this error differently
-        return array_fill(0, 1536, 0);
+        return array_fill(0, 8, 0);
     }
 
     /**
@@ -183,5 +183,17 @@ class SongService implements ISongService
         }
 
         return $this->songRepository->update($id, $data);
+    }
+    /**
+     * Delete a song by its ID.
+     *
+     * @param int $id
+     * @return bool
+     * @throws \Exception
+     */
+    public function deleteSong(int $id): bool
+    {
+        $song = $this->songRepository->find($id);
+        return $song->delete();
     }
 }

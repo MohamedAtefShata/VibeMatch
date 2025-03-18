@@ -108,21 +108,12 @@ LIMIT 5;
 
 3. **Improved Frontend Experience**:
     - Add more interactive elements for rating songs
-    - Implement a drag-and-drop interface for creating playlists
     - Add visualization for music recommendations
 
-4. **API Optimization**:
-    - Implement GraphQL for more efficient data fetching
-    - Add pagination and cursor-based navigation for large result sets
-
-5. **Enhanced Analytics**:
+4. **Enhanced Analytics**:
     - Track user interaction patterns
     - Provide insights on listening habits
     - Visualize recommendation effectiveness over time
-
-6. **Scalability Improvements**:
-    - Implement queue-based background processing for embedding generation
-    - Add horizontal scaling capabilities for high traffic scenarios
 
 ## ⚙️ Setup & Installation
 
@@ -170,7 +161,7 @@ LIMIT 5;
 7. Start the PostgreSQL container with pgvector extension:
    ```bash
    docker-compose up -d
-   ```**
+   ```
 
 7. Build frontend assets
    ```bash
@@ -199,9 +190,7 @@ After seeding, two default users are created:
 ## 📚 Performance Optimizations
 
 - HNSW indexing on vector columns for efficient similarity search
-- Repository pattern to allow for query optimization
 - Eager loading relationships to prevent N+1 query issues
-- Session-based storage for previous recommendations
 - Proper database indexing for frequently queried columns
 
 ## 📝 License

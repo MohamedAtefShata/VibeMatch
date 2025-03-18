@@ -5,16 +5,51 @@ import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { Folder, LayoutGrid } from 'lucide-vue-next';
+import { Folder, LayoutGrid, Music, User, Users, Settings } from 'lucide-vue-next';
+import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
 
-const mainNavItems: NavItem[] = [
+// Props to determine if the user is an admin
+interface Props {
+    isAdmin?: boolean;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+    isAdmin: false
+});
+
+// User navigation items
+const userNavItems = computed<NavItem[]>(() => [
     {
-        title: 'Dashboard',
+        title: 'Song Recommendation',
         href: '/dashboard',
-        icon: LayoutGrid,
+        icon: Music,
     },
-];
+    {
+        title: 'Personalized',
+        href: '/personalized',
+        icon: User,
+    },
+]);
+
+// Admin navigation items
+const adminNavItems = computed<NavItem[]>(() => [
+    {
+        title: 'Manage Songs',
+        href: '/admin/songs',
+        icon: Music,
+    },
+    {
+        title: 'Manage Users',
+        href: '/admin/users',
+        icon: Users,
+    },
+]);
+
+// Use the appropriate navigation items based on user role
+const mainNavItems = computed<NavItem[]>(() =>
+    props.isAdmin ? adminNavItems.value : userNavItems.value
+);
 
 const footerNavItems: NavItem[] = [
     {
@@ -40,6 +75,7 @@ const footerNavItems: NavItem[] = [
         </SidebarHeader>
 
         <SidebarContent>
+            <!-- Display appropriate navigation based on user role -->
             <NavMain :items="mainNavItems" />
         </SidebarContent>
 

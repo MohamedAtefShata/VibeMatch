@@ -263,7 +263,7 @@ const goToPage = (url: string | null) => {
 <template>
     <Head title="Manage Songs" />
 
-    <AppLayout :breadcrumbs="breadcrumbs">
+    <AppLayout :breadcrumbs="breadcrumbs" :isAdmin="isAdmin">
         <div class="admin-container">
             <!-- Success/Error Messages -->
             <div v-if="notification.show" :class="['notification', notification.type]">

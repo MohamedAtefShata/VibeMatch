@@ -97,23 +97,21 @@ LIMIT 5;
 
 ## 🚀 Areas for Improvement
 
-1. **ML-Based Recommendation Model**:
-    - Implement a dedicated machine learning model for recommendations
-    - Train on user interaction data for personalized recommendations
-    - Use techniques like matrix factorization or deep learning for better results
+#### **Performance & Architecture Enhancements**
+- **Implement HNSW Indexing:** Utilize **Hierarchical Navigable Small World (HNSW)** indexing on vector columns to enhance similarity search performance.
+- **Optimize Inertia Controller Routing:** Streamline routing in Inertia controllers for better efficiency and maintainable architecture.
+- **Improve Exception Handling:** Refine error management to ensure robustness and maintainability.
+- **Improve DTO Validation:** Establish a more global and consistent approach to validating DTOs for better data integrity.
 
-2. **Caching Mechanism**:
-    - Add Redis caching for frequently accessed recommendations
-    - Cache vector computations to reduce API calls to OpenAI
+#### **Scalability & System Reliability**
+- **Implement Unit Testing:** Introduce comprehensive **unit tests** to enhance code reliability and maintainability.
 
-3. **Improved Frontend Experience**:
-    - Add more interactive elements for rating songs
-    - Add visualization for music recommendations
-
-4. **Enhanced Analytics**:
-    - Track user interaction patterns
-    - Provide insights on listening habits
-    - Visualize recommendation effectiveness over time
+#### **Recommendation Model & AI Integration**
+- **ML-Based Recommendation Model:**
+    - Implement a dedicated **machine learning** model for recommendations.
+    - Train on **user interaction data** to enhance personalization.
+    - Use techniques like **matrix factorization** or **deep learning** for better results.
+- **Enhance Song Vector Creation:** Refactor the process of generating **song vectors** to improve efficiency and accuracy.
 
 ## ⚙️ Setup & Installation
 
@@ -178,20 +176,6 @@ After seeding, two default users are created:
     - Email: user@example.com
     - Password: password
     - Can browse and get recommendations
-
-📚 Possible Optimizations
-
-- Implement HNSW Indexing: Enhance similarity search performance by utilizing Hierarchical Navigable Small World (HNSW) indexing on vector columns.
-
-- Improve Exception Handling: Refine error management to ensure robustness and maintainability.
-
-- Optimize Inertia Controller Routing: Streamline routing in Inertia controllers for better efficiency and cleaner architecture.
-
-- Implement Unit Testing: Ensure code reliability and maintainability by introducing comprehensive unit tests.
-
-- Improve DTO Validation: Establish a more global and consistent approach to validating DTOs for better data integrity.
-
-- Enhance Song Vector Creation: Refactor the process of generating song vectors to improve efficiency and accuracy.
 
 ## 📝 License
 

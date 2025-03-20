@@ -7,18 +7,16 @@ import type { BreadcrumbItemType } from '@/types';
 
 interface Props {
     breadcrumbs?: BreadcrumbItemType[];
-    isAdmin?: boolean;
 }
 
 withDefaults(defineProps<Props>(), {
-    breadcrumbs: () => [],
-    isAdmin: false
+    breadcrumbs: () => []
 });
 </script>
 
 <template>
     <AppShell variant="sidebar">
-        <AppSidebar :isAdmin="isAdmin" />
+        <AppSidebar />
         <AppContent variant="sidebar">
             <AppSidebarHeader :breadcrumbs="breadcrumbs" />
             <slot />

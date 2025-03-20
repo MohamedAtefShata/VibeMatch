@@ -3,20 +3,12 @@ import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/vue3';
-import { Folder, LayoutGrid, Music, User, Users, Settings } from 'lucide-vue-next';
+import { type NavItem, SharedData } from '@/types';
+import { Link, usePage } from '@inertiajs/vue3';
+import { Folder, Music, User, Users } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
 
-// Props to determine if the user is an admin
-interface Props {
-    isAdmin?: boolean;
-}
-
-const props = withDefaults(defineProps<Props>(), {
-    isAdmin: false
-});
 
 // User navigation items
 const userNavItems = computed<NavItem[]>(() => [
@@ -45,10 +37,11 @@ const adminNavItems = computed<NavItem[]>(() => [
         icon: Users,
     },
 ]);
+const page = usePage<SharedData>();
 
 // Use the appropriate navigation items based on user role
 const mainNavItems = computed<NavItem[]>(() =>
-    props.isAdmin ? adminNavItems.value : userNavItems.value
+    page.props.auth.isAdmin ? adminNavItems.value : userNavItems.value
 );
 
 const footerNavItems: NavItem[] = [

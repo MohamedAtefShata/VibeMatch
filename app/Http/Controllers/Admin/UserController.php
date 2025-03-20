@@ -8,6 +8,7 @@ use App\Services\Auth\IAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules;
+use Inertia\Inertia;
 
 class UserController extends Controller
 {
@@ -34,14 +35,13 @@ class UserController extends Controller
     }
 
     /**
-     * Display a listing of users.
+     * Display the user management page.
      *
      * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Inertia\Response
      */
     public function index(Request $request)
     {
-        // Get paginated users from the service
         $perPage = $request->get('per_page', 15);
         $users = $this->userService->getAllUsers($perPage);
 
@@ -51,14 +51,16 @@ class UserController extends Controller
             return $user;
         });
 
-        return response()->json($users);
+        return Inertia::render('admin/AdminUserManagement', [
+            'users' => $users
+        ]);
     }
 
     /**
      * Store a newly created user.
      *
      * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function store(Request $request)
     {
@@ -67,11 +69,12 @@ class UserController extends Controller
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'is_admin' => ['boolean'],
-            'status' => ['nullable', 'string', 'in:active,inactive,suspended'],
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
         }
 
         // Create user using auth service for consistent registration logic
@@ -79,17 +82,23 @@ class UserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => $request->password,
-            'status' => $request->status ?? 'active',
         ];
 
-        $user = $this->authService->registerUser($userData);
+        try {
+            $user = $this->authService->registerUser($userData);
 
-        // Set admin status if requested
-        if ($request->has('is_admin') && $request->is_admin) {
-            $this->userService->updateAdminStatus($user, true);
+            // Set admin status if requested
+            if ($request->has('is_admin') && $request->is_admin) {
+                $this->userService->updateAdminStatus($user, true);
+            }
+
+            return redirect()->route('admin.users.index')
+                ->with('success', 'User created successfully');
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', 'Failed to create user: ' . $e->getMessage())
+                ->withInput();
         }
-
-        return response()->json($user, 201);
     }
 
     /**
@@ -97,14 +106,14 @@ class UserController extends Controller
      *
      * @param Request $request
      * @param int $id
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function update(Request $request, $id)
     {
         $user = $this->userService->getUserById($id);
 
         if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
+            return redirect()->back()->with('error', 'User not found');
         }
 
         $validator = Validator::make($request->all(), [
@@ -112,96 +121,73 @@ class UserController extends Controller
             'email' => ['nullable', 'string', 'email', 'max:255', 'unique:users,email,' . $id],
             'password' => ['nullable', 'confirmed', Rules\Password::defaults()],
             'is_admin' => ['nullable', 'boolean'],
-            'status' => ['nullable', 'string', 'in:active,inactive,suspended'],
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
         }
 
-        // Update user data
-        $updateData = [];
+        try {
+            // Update user data
+            $updateData = [];
 
-        if ($request->has('name')) {
-            $updateData['name'] = $request->name;
+            if ($request->has('name')) {
+                $updateData['name'] = $request->name;
+            }
+
+            if ($request->has('email')) {
+                $updateData['email'] = $request->email;
+            }
+
+            if ($request->filled('password')) {
+                $updateData['password'] = $request->password;
+            }
+
+            // Update basic user data if we have any
+            if (!empty($updateData)) {
+                $this->userService->updateUser($user, $updateData);
+            }
+
+            // Handle admin status separately if provided
+            if ($request->has('is_admin')) {
+                $this->userService->updateAdminStatus($user, $request->is_admin);
+            }
+
+            return redirect()->route('admin.users.index')
+                ->with('success', 'User updated successfully');
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', 'Failed to update user: ' . $e->getMessage())
+                ->withInput();
         }
-
-        if ($request->has('email')) {
-            $updateData['email'] = $request->email;
-        }
-
-        if ($request->filled('password')) {
-            $updateData['password'] = $request->password;
-        }
-
-        if ($request->has('status')) {
-            $updateData['status'] = $request->status;
-        }
-
-        // Update basic user data if we have any
-        if (!empty($updateData)) {
-            $this->userService->updateUser($user, $updateData);
-        }
-
-        // Handle admin status separately if provided
-        if ($request->has('is_admin')) {
-            $this->userService->updateAdminStatus($user, $request->is_admin);
-        }
-
-        // Get fresh user data
-        $updatedUser = $this->userService->getUserById($id);
-        $updatedUser->is_admin = $updatedUser->isAdmin();
-
-        return response()->json($updatedUser);
     }
 
     /**
      * Remove the specified user.
      *
      * @param int $id
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function destroy($id)
     {
-        $user = $this->userService->getUserById($id);
+        try {
+            $user = $this->userService->getUserById($id);
 
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
+            if (!$user) {
+                return redirect()->back()->with('error', 'User not found');
+            }
+
+            // Delete user
+            $this->userService->deleteUser($user);
+
+            return redirect()->route('admin.users.index')
+                ->with('success', 'User deleted successfully');
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', 'Failed to delete user: ' . $e->getMessage());
         }
-
-        // Delete user
-        $this->userService->deleteUser($user);
-
-        return response()->json(['message' => 'User deleted successfully']);
-    }
-
-    /**
-     * Update user status
-     *
-     * @param Request $request
-     * @param int $id
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function updateStatus(Request $request, $id)
-    {
-        $user = $this->userService->getUserById($id);
-
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'status' => ['required', 'string', 'in:active,inactive,suspended'],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        // Update status
-        $this->userService->updateUserStatus($user, $request->status);
-
-        return response()->json(['message' => 'User status updated successfully']);
     }
 
     /**
@@ -209,27 +195,35 @@ class UserController extends Controller
      *
      * @param Request $request
      * @param int $id
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function updateRole(Request $request, $id)
     {
-        $user = $this->userService->getUserById($id);
+        try {
+            $user = $this->userService->getUserById($id);
 
-        if (!$user) {
-            return response()->json(['message' => 'User not found'], 404);
+            if (!$user) {
+                return redirect()->back()->with('error', 'User not found');
+            }
+
+            $validator = Validator::make($request->all(), [
+                'is_admin' => ['required', 'boolean'],
+            ]);
+
+            if ($validator->fails()) {
+                return redirect()->back()
+                    ->withErrors($validator)
+                    ->withInput();
+            }
+
+            // Update admin status
+            $this->userService->updateAdminStatus($user, $request->is_admin);
+
+            return redirect()->route('admin.users.index')
+                ->with('success', 'User role updated successfully');
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', 'Failed to update user role: ' . $e->getMessage());
         }
-
-        $validator = Validator::make($request->all(), [
-            'is_admin' => ['required', 'boolean'],
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-
-        // Update admin status
-        $this->userService->updateAdminStatus($user, $request->is_admin);
-
-        return response()->json(['message' => 'User role updated successfully']);
     }
 }

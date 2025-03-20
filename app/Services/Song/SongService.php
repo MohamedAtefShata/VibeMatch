@@ -113,7 +113,7 @@ class SongService implements ISongService
     {
         // In a real application, this would use a text embedding model
         // For this example, we'll return a simple placeholder array
-        return [0.1, 0.2, 0.3, 0.4, 0.5]; // Placeholder embedding
+        return [0.1, 0.2, 0.3, 0.4, 0.5, 0.3, 0.4, 0.5]; // Placeholder embedding
     }
 
     /**

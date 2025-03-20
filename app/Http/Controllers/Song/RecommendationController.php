@@ -4,9 +4,10 @@ namespace App\Http\Controllers\Song;
 
 use App\Http\Controllers\Controller;
 use App\Services\Song\ISongService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class RecommendationController extends Controller
 {
@@ -31,26 +32,43 @@ class RecommendationController extends Controller
      * Get personalized recommendations for the authenticated user.
      *
      * @param Request $request
-     * @return JsonResponse
+     * @return Response
      */
-    public function personalizedRecommendations(Request $request): JsonResponse
+    public function personalizedRecommendations(Request $request): Response
     {
         $userId = auth()->id();
-        $forYou = [];
-        $basedOnGenre = [];
-        // For demo purposes, we'll use a hardcoded song ID to get recommendations
-        // In a real implementation, this would be based on user's history
-        $forYou = $this->songService->getRecommendationsForSong(1, 5)->toArray();
+        $limit = $request->input('limit', 5);
 
-        // Get recommendations based on multiple songs (user's favorites)
-        // This is just a placeholder - in a real app, you'd get the user's favorite songs
-        $userFavoriteSongs = [1, 2, 3];
-        $basedOnGenre = $this->songService->getRecommendationsForMultipleSongs($userFavoriteSongs, 5)->toArray();
+        try {
+            // For demo purposes, we'll use a hardcoded song ID to get recommendations
+            // In a real implementation, this would be based on user's history
+            $forYou = $this->songService->getRecommendationsForSong(1, $limit)->toArray();
 
-        return response()->json([
-            'forYou' => $forYou,
-            'basedOnGenre' => $basedOnGenre,
-            'newReleases' => [] // Placeholder for new releases
-        ]);
+            // Get recommendations based on multiple songs (user's favorites)
+            // This is just a placeholder - in a real app, you'd get the user's favorite songs
+            $userFavoriteSongs = [1, 2, 3];
+            $basedOnGenre = $this->songService->getRecommendationsForMultipleSongs($userFavoriteSongs, $limit)->toArray();
+
+            return Inertia::render('Songs/PersonalizedRecommendations', [
+                'recommendations' => [
+                    'forYou' => $forYou,
+                    'basedOnGenre' => $basedOnGenre,
+                    'newReleases' => [] // Placeholder for new releases
+                ],
+                'success' => true
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to get personalized recommendations: ' . $e->getMessage());
+
+            return Inertia::render('Songs/PersonalizedRecommendations', [
+                'recommendations' => [
+                    'forYou' => [],
+                    'basedOnGenre' => [],
+                    'newReleases' => []
+                ],
+                'success' => false,
+                'error' => 'Failed to get personalized recommendations: ' . $e->getMessage()
+            ]);
+        }
     }
 }

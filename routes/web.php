@@ -4,6 +4,14 @@ use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+// Create an error handler route
+Route::get('/error', function() {
+    return Inertia::render('Error', [
+        'status' => session('status', 500),
+        'message' => session('message', 'An error occurred')
+    ]);
+})->name('error');
+
 Route::get('/', function () {
     return Inertia::render('Welcome');
 })->name('home');

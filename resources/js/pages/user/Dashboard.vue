@@ -21,7 +21,7 @@ const previousRecommendations = ref([]);
 
 // Fetch previous recommendations on component mount
 onMounted(() => {
-    router.get('/api/recommendations/history', {}, {
+    router.visit('/api/recommendations/history', {
         preserveState: true,
         onSuccess: (page) => {
             previousRecommendations.value = page.props.recommendations || [];
@@ -38,7 +38,8 @@ const searchSongs = () => {
         return;
     }
 
-    router.get(`/api/songs/search`, { query: searchQuery.value }, {
+    router.visit(`/api/songs/search`, {
+        data: { query: searchQuery.value },
         preserveState: true,
         onSuccess: (page) => {
             searchResults.value = page.props.results || [];
@@ -94,7 +95,7 @@ const storeRecommendation = (songId, sourceSongIds) => {
         preserveState: true,
         onSuccess: () => {
             // Refresh recommendation history after storing a new one
-            router.get('/api/recommendations/history', {}, {
+            router.visit('/api/recommendations/history', {
                 preserveState: true,
                 onSuccess: (page) => {
                     previousRecommendations.value = page.props.recommendations || [];
@@ -113,11 +114,14 @@ const rateRecommendation = (recommendationId, rating) => {
         rating: rating
     }, {
         preserveState: true,
-        onSuccess: () => {
-            // Update the UI to reflect the rating
-            const index = previousRecommendations.value.findIndex(r => r.id === recommendationId);
-            if (index !== -1) {
-                previousRecommendations.value[index].liked = rating;
+        onSuccess: (page) => {
+            // Check if the page has the necessary props
+            if (page.props.success) {
+                // Update the UI to reflect the rating
+                const index = previousRecommendations.value.findIndex(r => r.id === recommendationId);
+                if (index !== -1) {
+                    previousRecommendations.value[index].liked = rating;
+                }
             }
         },
         onError: (errors) => {

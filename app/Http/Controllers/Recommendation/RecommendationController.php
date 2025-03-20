@@ -42,9 +42,9 @@ class RecommendationController extends Controller
      * Store a new recommendation.
      *
      * @param StoreRecommendationRequest $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return Response
      */
-    public function store(StoreRecommendationRequest $request)
+    public function store(StoreRecommendationRequest $request): Response
     {
         try {
             $userId = auth()->id();
@@ -57,16 +57,17 @@ class RecommendationController extends Controller
                 $sourceSongIds
             );
 
-            // Return JSON response with the stored recommendation
-            return response()->json([
+            return Inertia::render('user/Dashboard', [
                 'recommendation' => $recommendation,
+                'success' => true,
                 'message' => 'Recommendation stored successfully'
-            ], 201);
+            ]);
 
         } catch (\Exception $e) {
-            return response()->json([
+            return Inertia::render('user/Dashboard', [
+                'success' => false,
                 'error' => 'Failed to store recommendation: ' . $e->getMessage()
-            ], 500);
+            ]);
         }
     }
 
@@ -75,28 +76,31 @@ class RecommendationController extends Controller
      *
      * @param RateRecommendationRequest $request
      * @param int $id
-     * @return \Illuminate\Http\JsonResponse
+     * @return Response
      */
-    public function rate(RateRecommendationRequest $request, int $id)
+    public function rate(RateRecommendationRequest $request, int $id): Response
     {
         try {
             $rating = $request->input('rating');
             $success = $this->recommendationService->rateRecommendation($id, $rating);
 
             if (!$success) {
-                return response()->json([
+                return Inertia::render('user/Dashboard', [
+                    'success' => false,
                     'error' => 'Failed to rate recommendation'
-                ], 400);
+                ]);
             }
 
-            return response()->json([
+            return Inertia::render('user/Dashboard', [
+                'success' => true,
                 'message' => 'Recommendation rated successfully'
             ]);
 
         } catch (\Exception $e) {
-            return response()->json([
+            return Inertia::render('user/Dashboard', [
+                'success' => false,
                 'error' => 'Failed to rate recommendation: ' . $e->getMessage()
-            ], 500);
+            ]);
         }
     }
 
@@ -106,7 +110,7 @@ class RecommendationController extends Controller
      * @param Request $request
      * @return Response
      */
-    public function history(Request $request)
+    public function history(Request $request): Response
     {
         try {
             $user = auth()->user();
@@ -141,13 +145,17 @@ class RecommendationController extends Controller
                 ];
             });
 
-            // Return recommendations data with a 200 status
-            return response()->json($transformedHistory);
+            return Inertia::render('user/Dashboard', [
+                'recommendations' => $transformedHistory,
+                'success' => true
+            ]);
 
         } catch (\Exception $e) {
-            return response()->json([
+            return Inertia::render('user/Dashboard', [
+                'recommendations' => [],
+                'success' => false,
                 'error' => 'Failed to retrieve recommendation history: ' . $e->getMessage()
-            ], 500);
+            ]);
         }
     }
 
@@ -157,7 +165,7 @@ class RecommendationController extends Controller
      * @param Request $request
      * @return Response
      */
-    public function personalized(Request $request)
+    public function personalized(Request $request): Response
     {
         try {
             $user = auth()->user();
@@ -178,7 +186,6 @@ class RecommendationController extends Controller
                 'newReleases' => $newReleases
             ];
 
-            // For Inertia, we use the existing page and render to it
             return Inertia::render('Personalized', [
                 'recommendations' => $recommendationsData,
                 'success' => true

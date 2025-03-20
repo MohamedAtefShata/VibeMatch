@@ -8,7 +8,6 @@ use App\Http\Requests\Song\SearchSongRequest;
 use App\Http\Requests\Song\StoreSongRequest;
 use App\Http\Requests\Song\UpdateSongRequest;
 use App\Services\Song\ISongService;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -55,27 +54,32 @@ class SongController extends Controller
      */
     public function recommendationPage(): Response
     {
-        return Inertia::render('Songs/Recommendations');
+        return Inertia::render('user/Dashboard');
     }
 
     /**
      * Search for songs.
      *
      * @param SearchSongRequest $request
-     * @return JsonResponse
+     * @return Response
      */
-    public function search(SearchSongRequest $request): JsonResponse
+    public function search(SearchSongRequest $request): Response
     {
         $query = $request->input('query');
         $limit = $request->input('limit', 10);
 
         try {
             $songs = $this->songService->searchSongs($query, $limit);
-            return response()->json($songs);
+            return Inertia::render('user/Dashboard', [
+                'results' => $songs,
+                'query' => $query
+            ]);
         } catch (\Exception $e) {
-            return response()->json([
+            return Inertia::render('user/Dashboard', [
+                'results' => [],
+                'query' => $query,
                 'error' => 'Failed to search songs: ' . $e->getMessage()
-            ], 500);
+            ]);
         }
     }
 
@@ -83,20 +87,25 @@ class SongController extends Controller
      * Get recommendations based on selected songs.
      *
      * @param RecommendationRequest $request
-     * @return JsonResponse
+     * @return Response
      */
-    public function recommend(RecommendationRequest $request): JsonResponse
+    public function recommend(RecommendationRequest $request): Response
     {
         $songIds = $request->input('songIds');
         $limit = $request->input('limit', 5);
 
         try {
             $recommendations = $this->songService->getRecommendationsForMultipleSongs($songIds, $limit);
-            return response()->json($recommendations);
+            return Inertia::render('user/Dashboard', [
+                'recommendation' => $recommendations,
+                'success' => true
+            ]);
         } catch (\Exception $e) {
-            return response()->json([
+            return Inertia::render('user/Dashboard', [
+                'recommendation' => [],
+                'success' => false,
                 'error' => 'Failed to generate recommendations: ' . $e->getMessage()
-            ], 500);
+            ]);
         }
     }
 
@@ -112,50 +121,60 @@ class SongController extends Controller
             $song = $this->songService->getSongById($id);
 
             if (!$song) {
-                abort(404, 'Song not found');
+                return Inertia::render('Error', [
+                    'status' => 404,
+                    'message' => 'Song not found'
+                ]);
             }
 
             $similar = $this->songService->getRecommendationsForSong($id);
 
-            return Inertia::render('Song', [
+            return Inertia::render('user/Dashboard', [
                 'song' => $song,
                 'similar' => $similar
             ]);
         } catch (\Exception $e) {
-            abort(500, 'Failed to retrieve song data');
+            return Inertia::render('Error', [
+                'status' => 500,
+                'message' => 'Failed to retrieve song data'
+            ]);
         }
     }
 
     /**
      * Get previous recommendations for the user.
      *
-     * @return JsonResponse
+     * @return Response
      */
-    public function previousRecommendations(): JsonResponse
+    public function previousRecommendations(): Response
     {
         // Implementation would go here
-        return response()->json([]);
+        return Inertia::render('user/Dashboard', [
+            'recommendations' => []
+        ]);
     }
 
     /**
      * Store a new song.
      *
      * @param StoreSongRequest $request
-     * @return JsonResponse
+     * @return Response
      */
-    public function store(StoreSongRequest $request): JsonResponse
+    public function store(StoreSongRequest $request): Response
     {
         try {
             $song = $this->songService->storeSong($request->validated());
 
-            return response()->json([
+            return Inertia::render('Songs/Store', [
                 'song' => $song,
+                'success' => true,
                 'message' => 'Song successfully stored'
-            ], 201);
+            ]);
         } catch (\Exception $e) {
-            return response()->json([
+            return Inertia::render('Songs/Store', [
+                'success' => false,
                 'error' => 'Failed to store song: ' . $e->getMessage()
-            ], 500);
+            ]);
         }
     }
 
@@ -164,16 +183,16 @@ class SongController extends Controller
      *
      * @param UpdateSongRequest $request
      * @param int $id
-     * @return JsonResponse
+     * @return Response
      */
-    public function update(UpdateSongRequest $request, int $id): JsonResponse
+    public function update(UpdateSongRequest $request, int $id): Response
     {
         try {
-
             $song = $this->songService->updateSong($id, $request->validated());
 
-            return response()->json([
+            return Inertia::render('Songs/Update', [
                 'song' => $song,
+                'success' => true,
                 'message' => 'Song updated successfully'
             ]);
         } catch (\Exception $e) {
@@ -183,9 +202,11 @@ class SongController extends Controller
 
             $statusCode = $e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException ? 404 : 500;
 
-            return response()->json([
-                'error' => $errorMessage
-            ], $statusCode);
+            return Inertia::render('Songs/Update', [
+                'success' => false,
+                'error' => $errorMessage,
+                'status' => $statusCode
+            ]);
         }
     }
 
@@ -193,28 +214,33 @@ class SongController extends Controller
      * Delete a song.
      *
      * @param int $id
-     * @return JsonResponse
+     * @return Response
      */
-    public function destroy(int $id): JsonResponse
+    public function destroy(int $id): Response
     {
         try {
             $song = $this->songService->getSongById($id);
 
             if (!$song) {
-                return response()->json([
-                    'error' => 'Song not found'
-                ], 404);
+                return Inertia::render('Songs/Delete', [
+                    'success' => false,
+                    'error' => 'Song not found',
+                    'status' => 404
+                ]);
             }
 
             $this->songService->deleteSong($id);
 
-            return response()->json([
+            return Inertia::render('Songs/Delete', [
+                'success' => true,
                 'message' => 'Song deleted successfully'
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Failed to delete song: ' . $e->getMessage()
-            ], 500);
+            return Inertia::render('Songs/Delete', [
+                'success' => false,
+                'error' => 'Failed to delete song: ' . $e->getMessage(),
+                'status' => 500
+            ]);
         }
     }
 }

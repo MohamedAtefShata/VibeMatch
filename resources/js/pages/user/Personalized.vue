@@ -9,7 +9,9 @@ import './Personalized.css';
 const props = defineProps({
     profile: Object,
     recommendations: Object,
-    recommendationHistory: Array
+    recommendationHistory: Array,
+    success: Boolean,
+    error: String
 });
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -41,6 +43,9 @@ const recommendationHistory = ref({
     loading: false
 });
 
+// Show error message if exists
+const errorMessage = ref(props.error || null);
+
 // Form for rating recommendations
 const rateForm = useForm({
     rating: null
@@ -50,17 +55,23 @@ const rateForm = useForm({
 const rateRecommendation = (id: number, rating: number) => {
     rateForm.rating = rating;
 
-    rateForm.put(route('api.recommendations.rate', { id }), {
+    // Using Inertia put method
+    router.put(`/api/recommendations/${id}/rate`, {
+        rating: rating
+    }, {
         preserveState: true,
-        onSuccess: () => {
-            // Update the rating in our local state
-            const recommendation = recommendationHistory.value.items.find(item => item.id === id);
-            if (recommendation) {
-                recommendation.liked = rating;
-            }
+        onSuccess: (page) => {
+            // Check if the response indicates success
+            if (page.props.success) {
+                // Update the rating in our local state
+                const recommendation = recommendationHistory.value.items.find(item => item.id === id);
+                if (recommendation) {
+                    recommendation.liked = rating;
+                }
 
-            // Refresh personalized recommendations after rating
-            router.reload({ only: ['recommendations'] });
+                // Refresh personalized recommendations after rating
+                router.reload({ only: ['recommendations'] });
+            }
         }
     });
 };
@@ -96,6 +107,11 @@ watch(() => props.recommendationHistory, (newValue) => {
         };
     }
 }, { immediate: true });
+
+// Watch for error props
+watch(() => props.error, (newValue) => {
+    errorMessage.value = newValue || null;
+}, { immediate: true });
 </script>
 
 <template>
@@ -104,6 +120,11 @@ watch(() => props.recommendationHistory, (newValue) => {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="personalized-container">
             <h1 class="page-title">Your Personalized Experience</h1>
+
+            <!-- Error alert if there's an error -->
+            <div v-if="errorMessage" class="error-alert">
+                {{ errorMessage }}
+            </div>
 
             <!-- Recommendations Section -->
             <section class="recommendations-section">

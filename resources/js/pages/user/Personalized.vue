@@ -1,303 +1,258 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm, router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
-import './Personalized.css';
-
-// Define props coming from the server
-const props = defineProps({
-    profile: Object,
-    recommendations: Object,
-    recommendationHistory: Array,
-    success: Boolean,
-    error: String
-});
+import { Head, router } from '@inertiajs/vue3';
+import { ref, onMounted } from 'vue';
+import './Dashboard.css';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: "Personalized",
-        href: '/personalized',
+        title: 'Personalized',
+        href: '/Personalized',
     },
 ];
 
-// User's listening history and preferences
-const userProfile = ref({
-    favoriteGenres: props.profile?.favoriteGenres || [],
-    recentPlays: props.profile?.recentPlays || [],
-    topArtists: props.profile?.topArtists || [],
-    loading: false
-});
+const selectedSongs = ref([]);
+const recommendation = ref(null);
+const isLoading = ref(false);
+const previousRecommendations = ref([]);
 
-// Personalized recommendations
-const recommendations = ref({
-    forYou: props.recommendations?.forYou || [],
-    basedOnGenre: props.recommendations?.basedOnGenre || [],
-    newReleases: props.recommendations?.newReleases || [],
-    loading: false
-});
-
-// Recommendation history
-const recommendationHistory = ref({
-    items: props.recommendationHistory || [],
-    loading: false
-});
-
-// Show error message if exists
-const errorMessage = ref(props.error || null);
-
-// Form for rating recommendations
-const rateForm = useForm({
-    rating: null
-});
-
-// Rate a recommendation
-const rateRecommendation = (id: number, rating: number) => {
-    rateForm.rating = rating;
-
-    // Using Inertia put method
-    router.put(`/api/recommendations/${id}/rate`, {
-        rating: rating
-    }, {
+// Fetch previous recommendations on component mount
+onMounted(() => {
+    router.visit('/api/recommendations/history', {
         preserveState: true,
         onSuccess: (page) => {
-            // Check if the response indicates success
-            if (page.props.success) {
-                // Update the rating in our local state
-                const recommendation = recommendationHistory.value.items.find(item => item.id === id);
-                if (recommendation) {
-                    recommendation.liked = rating;
-                }
+            previousRecommendations.value = page.props.recommendations || [];
+        },
+        onError: (errors) => {
+            console.error('Error fetching previous recommendations:', errors);
+        },
+    });
+});
 
-                // Refresh personalized recommendations after rating
-                router.reload({ only: ['recommendations'] });
-            }
-        }
+const searchSongs = () => {
+    router.visit(`/api/songs/search`, {
+        data: { query: searchQuery.value },
+        preserveState: true,
+        onSuccess: (page) => {
+            searchResults.value = page.props.results || [];
+        },
+        onError: (errors) => {
+            console.error('Error searching songs:', errors);
+        },
     });
 };
 
-// Watch for changes in the props
-watch(() => props.profile, (newValue) => {
-    if (newValue) {
-        userProfile.value = {
-            favoriteGenres: newValue.favoriteGenres || [],
-            recentPlays: newValue.recentPlays || [],
-            topArtists: newValue.topArtists || [],
-            loading: false
-        };
+const addToSelection = (song) => {
+    // Check if song is already selected
+    if (!selectedSongs.value.some((s) => s.id === song.id)) {
+        selectedSongs.value.push(song);
+        searchQuery.value = '';
+        searchResults.value = [];
     }
-}, { immediate: true });
+};
 
-watch(() => props.recommendations, (newValue) => {
-    if (newValue) {
-        recommendations.value = {
-            forYou: newValue.forYou || [],
-            basedOnGenre: newValue.basedOnGenre || [],
-            newReleases: newValue.newReleases || [],
-            loading: false
-        };
-    }
-}, { immediate: true });
+const removeFromSelection = (song) => {
+    selectedSongs.value = selectedSongs.value.filter((s) => s.id !== song.id);
+};
 
-watch(() => props.recommendationHistory, (newValue) => {
-    if (newValue) {
-        recommendationHistory.value = {
-            items: newValue || [],
-            loading: false
-        };
-    }
-}, { immediate: true });
+const getRecommendation = () => {
+    isLoading.value = true;
 
-// Watch for error props
-watch(() => props.error, (newValue) => {
-    errorMessage.value = newValue || null;
-}, { immediate: true });
+    const songIds = selectedSongs.value.map((song) => song.id);
+    router.post(
+        '/api/songs/recommend',
+        { songIds },
+        {
+            preserveState: true,
+            onSuccess: (page) => {
+                // Assuming the response returns a recommended song
+                recommendation.value = page.props.recommendation;
+
+                // If recommendation is successful, store it
+                if (recommendation.value && recommendation.value.length > 0) {
+                    storeRecommendation(recommendation.value[0].id, songIds);
+                }
+                isLoading.value = false;
+            },
+            onError: (errors) => {
+                console.error('Error getting recommendation:', errors);
+                isLoading.value = false;
+            },
+        },
+    );
+};
+
+// Store a recommendation in the database
+const storeRecommendation = (songId, sourceSongIds) => {
+    router.post(
+        '/api/recommendations',
+        {
+            song_id: songId,
+            source_song_ids: sourceSongIds,
+        },
+        {
+            preserveState: true,
+            onSuccess: () => {
+                // Refresh recommendation history after storing a new one
+                router.visit('/api/recommendations/history', {
+                    preserveState: true,
+                    onSuccess: (page) => {
+                        previousRecommendations.value = page.props.recommendations || [];
+                    },
+                });
+            },
+            onError: (errors) => {
+                console.error('Error storing recommendation:', errors);
+            },
+        },
+    );
+};
+
+// Rate a recommendation
+const rateRecommendation = (recommendationId, rating) => {
+    router.put(
+        `/api/recommendations/${recommendationId}/rate`,
+        {
+            rating: rating,
+        },
+        {
+            preserveState: true,
+            onSuccess: (page) => {
+                // Check if the page has the necessary props
+                if (page.props.success) {
+                    // Update the UI to reflect the rating
+                    const index = previousRecommendations.value.findIndex((r) => r.id === recommendationId);
+                    if (index !== -1) {
+                        previousRecommendations.value[index].liked = rating;
+                    }
+                }
+            },
+            onError: (errors) => {
+                console.error('Error rating recommendation:', errors);
+            },
+        },
+    );
+};
 </script>
 
 <template>
-    <Head title="Personalized" />
+    <Head title="Recommend Songs" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="personalized-container">
-            <h1 class="page-title">Your Personalized Experience</h1>
-
-            <!-- Error alert if there's an error -->
-            <div v-if="errorMessage" class="error-alert">
-                {{ errorMessage }}
-            </div>
-
-            <!-- Recommendations Section -->
-            <section class="recommendations-section">
-                <h2 class="section-title">Personalized Recommendations</h2>
-                <div v-if="recommendations.loading" class="loading-indicator">
-                    Finding the perfect songs for you...
-                </div>
-                <div v-else class="recommendations-content">
-                    <!-- For You -->
-                    <div class="recommendation-category">
-                        <h3>Made For You</h3>
-                        <div class="songs-grid">
-                            <div v-for="song in recommendations.forYou" :key="song.id" class="song-card">
-                                <img :src="song.image_url" alt="Album Cover" class="song-cover" />
-                                <div class="song-info">
-                                    <div class="song-title">{{ song.title }}</div>
-                                    <div class="song-artist">{{ song.artist }}</div>
-                                </div>
-                                <button class="play-button">Play</button>
-                            </div>
-                            <div v-if="!recommendations.forYou || recommendations.forYou.length === 0" class="empty-state">
-                                Keep listening to get personalized recommendations!
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Based on Genres -->
-                    <div class="recommendation-category">
-                        <h3>Based on Your Favorite Genres</h3>
-                        <div class="songs-grid">
-                            <div v-for="song in recommendations.basedOnGenre" :key="song.id" class="song-card">
-                                <img :src="song.image_url" alt="Album Cover" class="song-cover" />
-                                <div class="song-info">
-                                    <div class="song-title">{{ song.title }}</div>
-                                    <div class="song-artist">{{ song.artist }}</div>
-                                </div>
-                                <button class="play-button">Play</button>
-                            </div>
-                            <div v-if="!recommendations.basedOnGenre || recommendations.basedOnGenre.length === 0" class="empty-state">
-                                Explore more genres to get recommendations!
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- New Releases -->
-                    <div class="recommendation-category">
-                        <h3>New Releases For You</h3>
-                        <div class="songs-grid">
-                            <div v-for="song in recommendations.newReleases" :key="song.id" class="song-card">
-                                <img :src="song.image_url" alt="Album Cover" class="song-cover" />
-                                <div class="song-info">
-                                    <div class="song-title">{{ song.title }}</div>
-                                    <div class="song-artist">{{ song.artist }}</div>
-                                </div>
-                                <button class="play-button">Play</button>
-                            </div>
-                            <div v-if="!recommendations.newReleases || recommendations.newReleases.length === 0" class="empty-state">
-                                No new releases matching your taste yet. Check back soon!
+        <div class="container">
+            <!-- Central Square Container -->
+            <div class="central-square">
+                <!-- Recommendation Result (shows at top when available) -->
+                <div v-if="recommendation" class="recommendation-section">
+                    <h2 class="section-title">Recommended Song</h2>
+                    <div class="recommendation-content">
+                        <img :src="recommendation[0].image_url" alt="Album Cover" class="album-cover" />
+                        <div class="song-details">
+                            <h3 class="song-title">{{ recommendation[0].title }}</h3>
+                            <p class="artist-name">{{ recommendation[0].artist }}</p>
+                            <div class="button-group">
+                                <button class="btn btn-primary">Play Now</button>
+                                <button class="btn btn-secondary">Add to Playlist</button>
                             </div>
                         </div>
                     </div>
                 </div>
-            </section>
 
-            <!-- Recommendation History Section -->
-            <section class="history-section">
-                <h2 class="section-title">Your Recommendation History</h2>
-                <div v-if="recommendationHistory.loading" class="loading-indicator">
-                    Loading your recommendation history...
-                </div>
-                <div v-else class="history-content">
-                    <div v-if="recommendationHistory.items && recommendationHistory.items.length > 0" class="history-items">
-                        <div v-for="item in recommendationHistory.items" :key="item.id" class="history-item">
-                            <div class="history-item-content">
-                                <div class="history-left">
-                                    <img :src="item.recommendedSong.image_url" alt="Album Cover" class="history-thumbnail" />
+                <!-- Main Content Area -->
+                <div class="main-content">
+                    <!-- Search Bar -->
+                    <div class="search-section">
+                        <h2 class="section-title">Search Songs</h2>
+                        <div class="search-container">
+                            <input type="text" v-model="searchQuery" @input="searchSongs" placeholder="Search for songs..." class="search-input" />
+
+                            <!-- Search Results Dropdown -->
+                            <div v-if="searchResults.length > 0" class="search-results">
+                                <div v-for="song in searchResults" :key="song.id" class="search-result-item" @click="addToSelection(song)">
+                                    <div class="result-text">{{ song.title }} - {{ song.artist }}</div>
+                                    <button class="add-button">Add</button>
                                 </div>
-                                <div class="history-details">
-                                    <h4 class="history-title">{{ item.recommendedSong.title }}</h4>
-                                    <p class="history-artist">{{ item.recommendedSong.artist }}</p>
-                                    <div class="history-based-on">
-                                        <p class="based-on-text">Based on: </p>
-                                        <div class="based-on-pills">
-                                            <span
-                                                v-for="(song, index) in item.basedOn.slice(0, 3)"
-                                                :key="index"
-                                                class="based-on-pill"
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Selected Songs -->
+                    <div class="selected-section">
+                        <h2 class="section-title">Selected Songs</h2>
+                        <div class="selected-container">
+                            <div v-if="selectedSongs.length > 0">
+                                <div v-for="song in selectedSongs" :key="song.id" class="selected-item">
+                                    <div class="song-text">{{ song.title }} - {{ song.artist }}</div>
+                                    <button @click="removeFromSelection(song)" class="remove-button">Remove</button>
+                                </div>
+                            </div>
+                            <div v-else class="empty-selection">No songs selected yet</div>
+                        </div>
+                    </div>
+
+                    <!-- Recommendation Button -->
+                    <div class="button-section">
+                        <button
+                            @click="getRecommendation"
+                            class="recommend-button"
+                            :disabled="selectedSongs.length < 1 || isLoading"
+                            :class="{ disabled: selectedSongs.length < 1 || isLoading }"
+                        >
+                            <span v-if="isLoading">Finding recommendation...</span>
+                            <span v-else>Get Recommendation</span>
+                        </button>
+                    </div>
+
+                    <!-- Previous Recommendations -->
+                    <div class="previous-recommendations-section">
+                        <h2 class="section-title">Previous Recommendations</h2>
+                        <div class="previous-recommendations-container">
+                            <div v-if="previousRecommendations.length > 0">
+                                <div v-for="item in previousRecommendations" :key="item.id" class="recommendation-item">
+                                    <div class="recommendation-item-content">
+                                        <div class="recommendation-left">
+                                            <img :src="item.recommendedSong.image_url" alt="Album Cover" class="recommendation-thumbnail" />
+                                        </div>
+                                        <div class="recommendation-details">
+                                            <h4 class="recommendation-title">{{ item.recommendedSong.title }}</h4>
+                                            <p class="recommendation-artist">{{ item.recommendedSong.artist }}</p>
+                                            <div class="recommendation-based-on">
+                                                <p class="based-on-text">Based on:</p>
+                                                <div class="based-on-pills">
+                                                    <span v-for="song in item.basedOn.slice(0, 3)" :key="song.id" class="based-on-pill">
+                                                        {{ song.title }}
+                                                    </span>
+                                                    <span v-if="item.basedOn.length > 3" class="based-on-pill more">
+                                                        +{{ item.basedOn.length - 3 }} more
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="recommendation-actions">
+                                            <button
+                                                class="rating-button like"
+                                                :class="{ active: item.liked === 1 }"
+                                                @click="rateRecommendation(item.id, 1)"
                                             >
-                                                {{ song.title }}
-                                            </span>
-                                            <span v-if="item.basedOn.length > 3" class="based-on-pill more">
-                                                +{{ item.basedOn.length - 3 }} more
-                                            </span>
+                                                👍
+                                            </button>
+                                            <button
+                                                class="rating-button dislike"
+                                                :class="{ active: item.liked === -1 }"
+                                                @click="rateRecommendation(item.id, -1)"
+                                            >
+                                                👎
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="history-actions">
-                                    <button
-                                        @click="rateRecommendation(item.id, 1)"
-                                        class="rating-button like"
-                                        :class="{ 'active': item.liked === 1 }"
-                                    >
-                                        👍
-                                    </button>
-                                    <button
-                                        @click="rateRecommendation(item.id, -1)"
-                                        class="rating-button dislike"
-                                        :class="{ 'active': item.liked === -1 }"
-                                    >
-                                        👎
-                                    </button>
-                                </div>
                             </div>
-                        </div>
-                    </div>
-                    <div v-else class="empty-state">
-                        No recommendation history yet. Start exploring songs!
-                    </div>
-                </div>
-            </section>
-
-            <!-- User Profile Section -->
-            <section class="profile-section">
-                <h2 class="section-title">Your Music Profile</h2>
-                <div v-if="userProfile.loading" class="loading-indicator">
-                    Loading your profile...
-                </div>
-                <div v-else class="profile-content">
-                    <!-- Favorite Genres -->
-                    <div class="profile-card">
-                        <h3>Your Favorite Genres</h3>
-                        <div class="genres-list">
-                            <span v-for="genre in userProfile.favoriteGenres" :key="genre.name" class="genre-tag">
-                                {{ genre.name }}
-                            </span>
-                            <span v-if="!userProfile.favoriteGenres || userProfile.favoriteGenres.length === 0" class="empty-state">
-                                No favorite genres yet. Start listening to more music!
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- Recently Played -->
-                    <div class="profile-card">
-                        <h3>Recently Played</h3>
-                        <div class="songs-list">
-                            <div v-for="song in userProfile.recentPlays" :key="song.id" class="song-item">
-                                <img :src="song.image_url" alt="Album Cover" class="song-thumbnail" />
-                                <div class="song-details">
-                                    <div class="song-title">{{ song.title }}</div>
-                                    <div class="song-artist">{{ song.artist }}</div>
-                                </div>
-                            </div>
-                            <div v-if="!userProfile.recentPlays || userProfile.recentPlays.length === 0" class="empty-state">
-                                No recently played songs. Start listening!
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Top Artists -->
-                    <div class="profile-card">
-                        <h3>Your Top Artists</h3>
-                        <div class="artists-list">
-                            <div v-for="artist in userProfile.topArtists" :key="artist.id" class="artist-item">
-                                <img :src="artist.image_url" alt="Artist" class="artist-thumbnail" />
-                                <div class="artist-name">{{ artist.name }}</div>
-                            </div>
-                            <div v-if="!userProfile.topArtists || userProfile.topArtists.length === 0" class="empty-state">
-                                No top artists yet. Keep exploring music!
-                            </div>
+                            <div v-else class="empty-recommendations">No previous recommendations yet</div>
                         </div>
                     </div>
                 </div>
-            </section>
+            </div>
         </div>
     </AppLayout>
 </template>

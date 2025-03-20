@@ -147,10 +147,6 @@ const rateRecommendation = (recommendationId, rating) => {
                         <div class="song-details">
                             <h3 class="song-title">{{ recommendation[0].title }}</h3>
                             <p class="artist-name">{{ recommendation[0].artist }}</p>
-                            <div class="button-group">
-                                <button class="btn btn-primary">Play Now</button>
-                                <button class="btn btn-secondary">Add to Playlist</button>
-                            </div>
                         </div>
                     </div>
                 </div>

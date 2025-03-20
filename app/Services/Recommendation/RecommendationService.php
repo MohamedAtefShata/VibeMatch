@@ -128,7 +128,7 @@ class RecommendationService implements IRecommendationService
             }
 
             // Get all the liked songs to find similar ones
-            $likedSongs = collect();
+            $likedSongs = new Collection();
             foreach ($likedSongIds as $songId) {
                 $likedSongs->push($this->songRepository->find($songId));
             }

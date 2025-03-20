@@ -179,11 +179,19 @@ After seeding, two default users are created:
     - Password: password
     - Can browse and get recommendations
 
-## 📚 Performance Optimizations
+📚 Possible Optimizations
 
-- HNSW indexing on vector columns for efficient similarity search
-- Eager loading relationships to prevent N+1 query issues
-- Proper database indexing for frequently queried columns
+- Implement HNSW Indexing: Enhance similarity search performance by utilizing Hierarchical Navigable Small World (HNSW) indexing on vector columns.
+
+- Improve Exception Handling: Refine error management to ensure robustness and maintainability.
+
+- Optimize Inertia Controller Routing: Streamline routing in Inertia controllers for better efficiency and cleaner architecture.
+
+- Implement Unit Testing: Ensure code reliability and maintainability by introducing comprehensive unit tests.
+
+- Improve DTO Validation: Establish a more global and consistent approach to validating DTOs for better data integrity.
+
+- Enhance Song Vector Creation: Refactor the process of generating song vectors to improve efficiency and accuracy.
 
 ## 📝 License
 

@@ -25,6 +25,14 @@ interface SongRepositoryInterface
     public function find(int $id): ?Song;
 
     /**
+     * Get multiple songs by their IDs
+     *
+     * @param array $ids
+     * @return Collection
+     */
+    public function findMany(array $ids): Collection;
+
+    /**
      * Create a new song
      *
      * @param array $data

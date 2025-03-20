@@ -84,4 +84,12 @@ interface ISongService
      * @throws \Exception
      */
     public function deleteSong(int $id): bool;
+
+    /**
+     * Get newest songs
+     *
+     * @param int $limit
+     * @return Collection
+     */
+    public function getNewestSongs(int $limit = 5): Collection;
 }

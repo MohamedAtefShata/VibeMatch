@@ -436,3 +436,27 @@
     color: #6b7280;
     font-size: 0.875rem;
 }
+.rating-button {
+    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+    background-color: white;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.rating-button:hover {
+    background-color: #f3f4f6;
+}
+
+.rating-button.active.like {
+    color: #16a34a;
+    border-color: #16a34a;
+    background-color: #f0fdf4;
+}
+
+.rating-button.active.dislike {
+    color: #dc2626;
+    border-color: #dc2626;
+    background-color: #fef2f2;
+}

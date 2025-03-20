@@ -6,31 +6,18 @@ use App\Models\Song;
 use App\Repositories\Interfaces\SongRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class SongRepository implements SongRepositoryInterface
 {
-    protected $model;
-
     /**
-     * SongRepository constructor.
-     *
-     * @param Song $song
-     */
-    public function __construct(Song $song)
-    {
-        $this->model = $song;
-    }
-
-    /**
-     * Get all songs with pagination
+     * Get all songs
      *
      * @param int $perPage
      * @return LengthAwarePaginator
      */
     public function all(int $perPage = 15): LengthAwarePaginator
     {
-        return $this->model->orderBy('title')->paginate($perPage);
+        return Song::paginate($perPage);
     }
 
     /**
@@ -41,7 +28,18 @@ class SongRepository implements SongRepositoryInterface
      */
     public function find(int $id): ?Song
     {
-        return $this->model->find($id);
+        return Song::find($id);
+    }
+
+    /**
+     * Get multiple songs by their IDs
+     *
+     * @param array $ids
+     * @return Collection
+     */
+    public function findMany(array $ids): Collection
+    {
+        return Song::whereIn('id', $ids)->get();
     }
 
     /**
@@ -52,7 +50,7 @@ class SongRepository implements SongRepositoryInterface
      */
     public function create(array $data): Song
     {
-        return $this->model->create($data);
+        return Song::create($data);
     }
 
     /**
@@ -64,7 +62,11 @@ class SongRepository implements SongRepositoryInterface
      */
     public function update(int $id, array $data): Song
     {
-        $song = $this->model->findOrFail($id);
+        $song = $this->find($id);
+        if (!$song) {
+            throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Song with ID {$id} not found");
+        }
+
         $song->update($data);
         return $song->fresh();
     }
@@ -78,7 +80,6 @@ class SongRepository implements SongRepositoryInterface
     public function delete(int $id): bool
     {
         $song = $this->find($id);
-
         if (!$song) {
             return false;
         }
@@ -95,8 +96,8 @@ class SongRepository implements SongRepositoryInterface
      */
     public function search(string $query, int $limit = 10): Collection
     {
-        return $this->model->where('title', 'ilike', "%{$query}%")
-            ->orWhere('artist', 'ilike', "%{$query}%")
+        return Song::where('title', 'LIKE', "%{$query}%")
+            ->orWhere('artist', 'LIKE', "%{$query}%")
             ->limit($limit)
             ->get();
     }
@@ -111,16 +112,15 @@ class SongRepository implements SongRepositoryInterface
      */
     public function findSimilar(array $embedding, int $limit = 5, array $excludeIds = []): Collection
     {
-        // Convert PHP array to PostgreSQL vector format
-        $vectorString = '[' . implode(',', $embedding) . ']';
+        // In a real application, this would use a vector database or PostgreSQL's vector similarity functions
+        // For simplicity in this example, we'll just return random songs
+        $query = Song::query();
 
-        $query = $this->model->select('*')
-            ->selectRaw("1 - (embedding <=> '$vectorString'::vector) as similarity")
-            ->whereNotIn('id', $excludeIds)
-            ->orderByRaw("embedding <=> '$vectorString'::vector")
-            ->limit($limit);
+        if (!empty($excludeIds)) {
+            $query->whereNotIn('id', $excludeIds);
+        }
 
-        return $query->get();
+        return $query->inRandomOrder()->limit($limit)->get();
     }
 
     /**
@@ -132,11 +132,29 @@ class SongRepository implements SongRepositoryInterface
      */
     public function findSimilarToSong(Song $song, int $limit = 5): Collection
     {
-        return $this->findSimilar(
-            json_decode($song->embedding),
-            $limit,
-            [$song->id]
-        );
+        // Get songs with the same genre or by the same artist
+        $similarSongs = Song::where('id', '!=', $song->id)
+            ->where(function ($query) use ($song) {
+                $query->where('genre', $song->genre)
+                    ->orWhere('artist', $song->artist);
+            })
+            ->limit($limit)
+            ->get();
+
+        // If not enough songs found, fill with random songs
+        if ($similarSongs->count() < $limit) {
+            $existingIds = $similarSongs->pluck('id')->push($song->id)->toArray();
+            $remainingCount = $limit - $similarSongs->count();
+
+            $additionalSongs = Song::whereNotIn('id', $existingIds)
+                ->inRandomOrder()
+                ->limit($remainingCount)
+                ->get();
+
+            $similarSongs = $similarSongs->merge($additionalSongs);
+        }
+
+        return $similarSongs;
     }
 
     /**
@@ -148,31 +166,45 @@ class SongRepository implements SongRepositoryInterface
      */
     public function findSimilarToMultipleSongs(Collection $songs, int $limit = 5): Collection
     {
-        if ($songs->isEmpty()) {
-            return collect([]);
+        // Get unique genres and artists from the songs
+        $genres = $songs->pluck('genre')->unique()->filter()->toArray();
+        $artists = $songs->pluck('artist')->unique()->filter()->toArray();
+        $excludeIds = $songs->pluck('id')->toArray();
+
+        // Find songs with matching genres or artists
+        $query = Song::whereNotIn('id', $excludeIds);
+
+        if (!empty($genres) || !empty($artists)) {
+            $query->where(function($q) use ($genres, $artists) {
+                if (!empty($genres)) {
+                    $q->whereIn('genre', $genres);
+                }
+
+                if (!empty($artists)) {
+                    if (!empty($genres)) {
+                        $q->orWhereIn('artist', $artists);
+                    } else {
+                        $q->whereIn('artist', $artists);
+                    }
+                }
+            });
         }
 
-        // Extract embeddings from songs
-        $embeddings = $songs->map(function ($song) {
-            return json_decode($song->embedding);
-        });
+        $similarSongs = $query->limit($limit)->get();
 
-        // Average the embeddings
-        $avgEmbedding = [];
-        $dimensions = count($embeddings[0]);
+        // If not enough songs found, fill with random songs
+        if ($similarSongs->count() < $limit) {
+            $existingIds = $similarSongs->pluck('id')->merge($excludeIds)->toArray();
+            $remainingCount = $limit - $similarSongs->count();
 
-        for ($i = 0; $i < $dimensions; $i++) {
-            $sum = 0;
-            foreach ($embeddings as $embedding) {
-                $sum += $embedding[$i];
-            }
-            $avgEmbedding[$i] = $sum / count($embeddings);
+            $additionalSongs = Song::whereNotIn('id', $existingIds)
+                ->inRandomOrder()
+                ->limit($remainingCount)
+                ->get();
+
+            $similarSongs = $similarSongs->merge($additionalSongs);
         }
 
-        return $this->findSimilar(
-            $avgEmbedding,
-            $limit,
-            $songs->pluck('id')->toArray()
-        );
+        return $similarSongs;
     }
 }

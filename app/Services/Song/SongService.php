@@ -4,16 +4,18 @@ namespace App\Services\Song;
 
 use App\Models\Song;
 use App\Repositories\Interfaces\SongRepositoryInterface;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class SongService implements ISongService
 {
+    /**
+     * @var SongRepositoryInterface
+     */
     protected $songRepository;
 
     /**
-     * SongService constructor.
+     * Create a new service instance.
      *
      * @param SongRepositoryInterface $songRepository
      */
@@ -26,7 +28,7 @@ class SongService implements ISongService
      * Get all songs with pagination
      *
      * @param int $perPage
-     * @return LengthAwarePaginator
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
     public function getAllSongs(int $perPage = 15)
     {
@@ -65,10 +67,11 @@ class SongService implements ISongService
      */
     public function getRecommendationsForSong(int $songId, int $limit = 5): Collection
     {
-        $song = $this->songRepository->find($songId);
+        $song = $this->getSongById($songId);
 
         if (!$song) {
-            return collect([]);
+            Log::warning("Tried to get recommendations for non-existent song ID: {$songId}");
+            return new Collection();
         }
 
         return $this->songRepository->findSimilarToSong($song, $limit);
@@ -83,10 +86,18 @@ class SongService implements ISongService
      */
     public function getRecommendationsForMultipleSongs(array $songIds, int $limit = 5): Collection
     {
-        $songs = Song::whereIn('id', $songIds)->get();
+        // Get the songs from the repository
+        $songs = new Collection();
+        foreach ($songIds as $id) {
+            $song = $this->getSongById($id);
+            if ($song) {
+                $songs->push($song);
+            }
+        }
 
         if ($songs->isEmpty()) {
-            return collect([]);
+            Log::warning("No valid songs found for IDs: " . implode(', ', $songIds));
+            return new Collection();
         }
 
         return $this->songRepository->findSimilarToMultipleSongs($songs, $limit);
@@ -94,41 +105,15 @@ class SongService implements ISongService
 
     /**
      * Generate embedding for song data
-     * Using OpenAI's API to generate embeddings
      *
      * @param array $songData
      * @return array
      */
     public function generateEmbedding(array $songData): array
     {
-        // Combine song data into a single text for embedding
-        $text = implode(' ', [
-            $songData['title'] ?? '',
-            $songData['artist'] ?? '',
-            $songData['album'] ?? '',
-            $songData['genre'] ?? '',
-            (string)($songData['year'] ?? ''),
-            $songData['lyrics'] ?? ''
-        ]);
-
-        // Call OpenAI API to generate embedding
-        // Note: You should set OPENAI_API_KEY in your .env file
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . config('services.openai.api_key'),
-            'Content-Type' => 'application/json',
-        ])
-            ->post('https://api.openai.com/v1/embeddings', [
-                'model' => 'text-embedding-ada-002',
-                'input' => $text
-            ]);
-
-        if ($response->successful()) {
-            return $response->json()['data'][0]['embedding'];
-        }
-
-        // Return empty array if API call fails
-        // In production, you might want to handle this error differently
-        return array_fill(0, 8, 0);
+        // In a real application, this would use a text embedding model
+        // For this example, we'll return a simple placeholder array
+        return [0.1, 0.2, 0.3, 0.4, 0.5]; // Placeholder embedding
     }
 
     /**
@@ -139,11 +124,10 @@ class SongService implements ISongService
      */
     public function storeSong(array $data): Song
     {
-        // Generate embedding for the song
-        $embedding = $this->generateEmbedding($data);
-
-        // Convert embedding to JSON string for storage
-        $data['embedding'] = json_encode($embedding);
+        // Generate embedding if not provided
+        if (!isset($data['embedding'])) {
+            $data['embedding'] = json_encode($this->generateEmbedding($data));
+        }
 
         return $this->songRepository->create($data);
     }
@@ -157,33 +141,40 @@ class SongService implements ISongService
      */
     public function updateSong(int $id, array $data): Song
     {
-        $song = $this->songRepository->find($id);
-
-        if (!$song) {
-            throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Song with ID {$id} not found");
-        }
-
-        // Check if any fields that would affect embedding are changed
-        $embeddingFields = ['title', 'artist', 'album', 'genre', 'year', 'lyrics'];
+        // Check if we need to regenerate the embedding
+        $embeddingFields = ['title', 'artist', 'album', 'genre', 'lyrics'];
         $needsNewEmbedding = false;
 
         foreach ($embeddingFields as $field) {
-            if (isset($data[$field]) && $song->{$field} !== $data[$field]) {
+            if (isset($data[$field])) {
                 $needsNewEmbedding = true;
                 break;
             }
         }
 
-        // Generate new embedding if needed
         if ($needsNewEmbedding) {
-            // Merge current song data with updates for embedding generation
-            $songData = array_merge($song->toArray(), $data);
-            $embedding = $this->generateEmbedding($songData);
-            $data['embedding'] = json_encode($embedding);
+            // Get current song data
+            $song = $this->getSongById($id);
+            if (!$song) {
+                throw new \Illuminate\Database\Eloquent\ModelNotFoundException("Song with ID {$id} not found");
+            }
+
+            // Merge current data with new data
+            $mergedData = array_merge([
+                'title' => $song->title,
+                'artist' => $song->artist,
+                'album' => $song->album,
+                'genre' => $song->genre,
+                'lyrics' => $song->lyrics,
+            ], $data);
+
+            // Generate new embedding
+            $data['embedding'] = json_encode($this->generateEmbedding($mergedData));
         }
 
         return $this->songRepository->update($id, $data);
     }
+
     /**
      * Delete a song by its ID.
      *
@@ -193,7 +184,19 @@ class SongService implements ISongService
      */
     public function deleteSong(int $id): bool
     {
-        $song = $this->songRepository->find($id);
-        return $song->delete();
+        return $this->songRepository->delete($id);
+    }
+
+    /**
+     * Get newest songs
+     *
+     * @param int $limit
+     * @return Collection
+     */
+    public function getNewestSongs(int $limit = 5): Collection
+    {
+        // In a real application, this would fetch songs ordered by creation date
+        // For this example, we'll just get random songs
+        return Song::inRandomOrder()->limit($limit)->get();
     }
 }

@@ -66,18 +66,22 @@ class SongController extends Controller
      * Search for songs.
      *
      * @param SearchSongRequest $request
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function search(SearchSongRequest $request): JsonResponse
+    public function search(SearchSongRequest $request)
     {
         $query = $request->input('query');
         $limit = $request->input('limit', 10);
 
         try {
             $songs = $this->songService->searchSongs($query, $limit);
+
+            // Return JSON response for API endpoint
             return response()->json($songs);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to search songs'], 500);
+            return response()->json([
+                'error' => 'Failed to search songs: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -85,18 +89,23 @@ class SongController extends Controller
      * Get recommendations based on selected songs.
      *
      * @param RecommendationRequest $request
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function recommend(RecommendationRequest $request): JsonResponse
+    public function recommend(RecommendationRequest $request)
     {
         $songIds = $request->input('songIds');
         $limit = $request->input('limit', 5);
 
         try {
             $recommendations = $this->songService->getRecommendationsForMultipleSongs($songIds, $limit);
+
+            // Return JSON response
             return response()->json($recommendations);
+
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to generate recommendations'], 500);
+            return response()->json([
+                'error' => 'Failed to generate recommendations: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -120,7 +129,8 @@ class SongController extends Controller
             // Pass isAdmin flag to view for conditional UI rendering
             $isAdmin = request()->user() ? request()->user()->isAdmin() : false;
 
-            return Inertia::render('Songs/Show', [
+            // Keep the original page path if it exists, or adjust based on your application structure
+            return Inertia::render('Song', [
                 'song' => $song,
                 'similar' => $similar,
                 'isAdmin' => $isAdmin
@@ -134,15 +144,22 @@ class SongController extends Controller
      * Store a new song.
      *
      * @param StoreSongRequest $request
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function store(StoreSongRequest $request): JsonResponse
+    public function store(StoreSongRequest $request)
     {
         try {
             $song = $this->songService->storeSong($request->validated());
-            return response()->json($song, 201);
+
+            return response()->json([
+                'song' => $song,
+                'message' => 'Song successfully stored'
+            ], 201);
+
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to store song: ' . $e->getMessage()], 500);
+            return response()->json([
+                'error' => 'Failed to store song: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -151,18 +168,28 @@ class SongController extends Controller
      *
      * @param UpdateSongRequest $request
      * @param int $id
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function update(UpdateSongRequest $request, int $id): JsonResponse
+    public function update(UpdateSongRequest $request, int $id)
     {
         try {
             $song = $this->songService->updateSong($id, $request->validated());
-            return response()->json($song);
+
+            return response()->json([
+                'song' => $song,
+                'message' => 'Song updated successfully'
+            ]);
+
         } catch (\Exception $e) {
-            if ($e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException) {
-                return response()->json(['error' => 'Song not found'], 404);
-            }
-            return response()->json(['error' => 'Failed to update song: ' . $e->getMessage()], 500);
+            $errorMessage = $e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException
+                ? 'Song not found'
+                : 'Failed to update song: ' . $e->getMessage();
+
+            $statusCode = $e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException ? 404 : 500;
+
+            return response()->json([
+                'error' => $errorMessage
+            ], $statusCode);
         }
     }
 
@@ -170,23 +197,30 @@ class SongController extends Controller
      * Delete a song.
      *
      * @param int $id
-     * @return JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function destroy(int $id): JsonResponse
+    public function destroy(int $id)
     {
         try {
             $song = $this->songService->getSongById($id);
 
             if (!$song) {
-                return response()->json(['error' => 'Song not found'], 404);
+                return response()->json([
+                    'error' => 'Song not found'
+                ], 404);
             }
 
             // Assuming your service has a deleteSong method
             $this->songService->deleteSong($id);
 
-            return response()->json(['message' => 'Song deleted successfully']);
+            return response()->json([
+                'message' => 'Song deleted successfully'
+            ]);
+
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to delete song: ' . $e->getMessage()], 500);
+            return response()->json([
+                'error' => 'Failed to delete song: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

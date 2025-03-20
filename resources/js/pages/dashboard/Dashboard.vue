@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
 import './Dashboard.css';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -21,27 +20,33 @@ const isLoading = ref(false);
 const previousRecommendations = ref([]);
 
 // Fetch previous recommendations on component mount
-onMounted(async () => {
-    try {
-        const response = await axios.get('/api/songs/previous-recommendations');
-        previousRecommendations.value = response.data;
-    } catch (error) {
-        console.error('Error fetching previous recommendations:', error);
-    }
+onMounted(() => {
+    router.get('/api/recommendations/history', {}, {
+        preserveState: true,
+        onSuccess: (page) => {
+            previousRecommendations.value = page.props.recommendations || [];
+        },
+        onError: (errors) => {
+            console.error('Error fetching previous recommendations:', errors);
+        }
+    });
 });
 
-const searchSongs = async () => {
+const searchSongs = () => {
     if (searchQuery.value.length < 2) {
         searchResults.value = [];
         return;
     }
 
-    try {
-        const response = await axios.get(`/api/songs/search?query=${searchQuery.value}`);
-        searchResults.value = response.data;
-    } catch (error) {
-        console.error('Error searching songs:', error);
-    }
+    router.get(`/api/songs/search`, { query: searchQuery.value }, {
+        preserveState: true,
+        onSuccess: (page) => {
+            searchResults.value = page.props.results || [];
+        },
+        onError: (errors) => {
+            console.error('Error searching songs:', errors);
+        }
+    });
 };
 
 const addToSelection = (song) => {
@@ -57,28 +62,68 @@ const removeFromSelection = (song) => {
     selectedSongs.value = selectedSongs.value.filter(s => s.id !== song.id);
 };
 
-const getRecommendation = async () => {
+const getRecommendation = () => {
     isLoading.value = true;
-    try {
-        const songIds = selectedSongs.value.map(song => song.id);
-        const response = await axios.post('/api/songs/recommend', { songIds });
-        recommendation.value = response.data;
 
-        // Add to previous recommendations
-        const newRecommendation = {
-            id: Date.now(), // Temporary ID until backend provides one
-            recommendedSong: response.data[0],
-            basedOn: [...selectedSongs.value],
-            timestamp: new Date().toISOString(),
-            liked: null // null = not rated, true = liked, false = disliked
-        };
+    const songIds = selectedSongs.value.map(song => song.id);
+    router.post('/api/songs/recommend', { songIds }, {
+        preserveState: true,
+        onSuccess: (page) => {
+            // Assuming the response returns a recommended song
+            recommendation.value = page.props.recommendation;
 
-        previousRecommendations.value.unshift(newRecommendation);
-    } catch (error) {
-        console.error('Error getting recommendation:', error);
-    } finally {
-        isLoading.value = false;
-    }
+            // If recommendation is successful, store it
+            if (recommendation.value && recommendation.value.length > 0) {
+                storeRecommendation(recommendation.value[0].id, songIds);
+            }
+            isLoading.value = false;
+        },
+        onError: (errors) => {
+            console.error('Error getting recommendation:', errors);
+            isLoading.value = false;
+        }
+    });
+};
+
+// Store a recommendation in the database
+const storeRecommendation = (songId, sourceSongIds) => {
+    router.post('/api/recommendations', {
+        song_id: songId,
+        source_song_ids: sourceSongIds
+    }, {
+        preserveState: true,
+        onSuccess: () => {
+            // Refresh recommendation history after storing a new one
+            router.get('/api/recommendations/history', {}, {
+                preserveState: true,
+                onSuccess: (page) => {
+                    previousRecommendations.value = page.props.recommendations || [];
+                }
+            });
+        },
+        onError: (errors) => {
+            console.error('Error storing recommendation:', errors);
+        }
+    });
+};
+
+// Rate a recommendation
+const rateRecommendation = (recommendationId, rating) => {
+    router.put(`/api/recommendations/${recommendationId}/rate`, {
+        rating: rating
+    }, {
+        preserveState: true,
+        onSuccess: () => {
+            // Update the UI to reflect the rating
+            const index = previousRecommendations.value.findIndex(r => r.id === recommendationId);
+            if (index !== -1) {
+                previousRecommendations.value[index].liked = rating;
+            }
+        },
+        onError: (errors) => {
+            console.error('Error rating recommendation:', errors);
+        }
+    });
 };
 
 </script>
@@ -211,13 +256,15 @@ const getRecommendation = async () => {
                                         <div class="recommendation-actions">
                                             <button
                                                 class="rating-button like"
-                                                :class="{ 'active': item.liked === true }"
+                                                :class="{ 'active': item.liked === 1 }"
+                                                @click="rateRecommendation(item.id, 1)"
                                             >
                                                 👍
                                             </button>
                                             <button
                                                 class="rating-button dislike"
-                                                :class="{ 'active': item.liked === false }"
+                                                :class="{ 'active': item.liked === -1 }"
+                                                @click="rateRecommendation(item.id, -1)"
                                             >
                                                 👎
                                             </button>

@@ -15,7 +15,7 @@ VibeMatch offers sophisticated music recommendation capabilities:
 
 - **Backend**: Laravel 12
 - **Frontend**: Vue.js with Inertia
-- **Database**: PostgreSQL with pgvector extension
+- **Database or docker**: PostgreSQL with pgvector extension
 - **Authentication**: Laravel's built-in authentication system
 - **Vector Embeddings**: OpenAI API for generating embeddings
 
@@ -141,26 +141,18 @@ LIMIT 5;
    ```bash
    npm install
    ```
+4. make sure that database configuration in .env similar to docker-compose configuration
 
-4. Set up environment variables
+5. Start the PostgreSQL container with pgvector extension:
    ```bash
-   cp .env.example .env
-   ```
-   Configure your database settings and OpenAI API key in `.env`
-
-5. Generate application key
-   ```bash
-   php artisan key:generate
+   docker-compose up -d
    ```
 
 6. Run migrations and seed the database
    ```bash
    php artisan migrate --seed
-   ```
-
-7. Start the PostgreSQL container with pgvector extension:
-   ```bash
-   docker-compose up -d
+   php artisan db:seed --class=UserSeeder
+   php artisan db:seed --class=SongSeeder
    ```
 
 7. Build frontend assets
